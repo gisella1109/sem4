@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/glucose_store.dart';
 import '../models/glucose_entry.dart';
+import '../models/artikel_model.dart';
 import 'health_profile_page.dart';
 import 'rewards_page.dart';
 import 'edit_profile_page.dart';
@@ -12,6 +13,7 @@ import 'glucose_history_page.dart';
 import 'insulin_tracker_page.dart';
 import 'notifikasi_page.dart';
 import 'manual_food_log_page.dart';
+import 'artikel_edukasi_page.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -210,6 +212,8 @@ class _DashboardPageState extends State<DashboardPage> {
                   _buildAksiCepat(),
                   const SizedBox(height: 20),
                   _buildTipsHarian(),
+                  const SizedBox(height: 20),
+                  _buildEdukasi(),
                   const SizedBox(height: 20),
                 ],
               ),
@@ -631,6 +635,7 @@ class _DashboardPageState extends State<DashboardPage> {
             },
           ),
         ),
+        
         const SizedBox(height: 8),
         // Dot indicator
         Row(
@@ -707,6 +712,100 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     );
   }
+  
+  // ignore: unused_element
+   Widget _buildEdukasi() {
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 20),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Edukasi Kesehatan',
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1A1A2E),
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        ...daftarArtikel.map((artikel) {
+          return GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => DetailArtikelPage(
+                  artikel: artikel,
+                  ),
+                ),
+              );
+            },
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  )
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // GAMBAR
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(16),
+                    ),
+                    child: Image.network(
+                      artikel.gambar,
+                      height: 140,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          artikel.judul,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: Color(0xFF2979FF),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          artikel.isi,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ],
+    ),
+  );
+}
 }
 
 enum _KondisiGula { rendah, normal, tinggi, sangatTinggi }

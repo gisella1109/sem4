@@ -203,6 +203,7 @@ class _IntroScreenState extends State<IntroScreen>
                           : "Selanjutnya",
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
                     ),
                   ),

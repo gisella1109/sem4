@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'register_page.dart';
 import 'dashboard_page.dart';
+import '../admin/admin_main_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -22,6 +23,7 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  // 🔥 LOGIN DENGAN ROLE
   void _handleLogin() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
@@ -42,10 +44,28 @@ class _LoginPageState extends State<LoginPage> {
 
     if (!mounted) return;
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const DashboardPage()),
-    );
+    // 🔑 ROLE LOGIN
+    if (email == "admin@gmail.com" && password == "123") {
+      // 👉 ADMIN
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const AdminMainPage()),
+      );
+    } else if (email == "user@gmail.com" && password == "123") {
+      // 👉 PASIEN
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const DashboardPage()),
+      );
+    } else {
+      // ❌ LOGIN GAGAL
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Email atau password salah'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 
   @override
@@ -64,13 +84,13 @@ class _LoginPageState extends State<LoginPage> {
               Center(
                 child: Column(
                   children: [
-                    Image.network(
-                      'https://cdn-icons-png.flaticon.com/512/415/415733.png',
-                      width: 90,
-                      height: 90,
+                    Image.asset(
+                     'assets/images/logo_foodlog.png',
+                      width: 350,
+                      height: 180,
                       errorBuilder: (_, __, ___) => const Icon(
                         Icons.health_and_safety,
-                        size: 90,
+                        size: 50,
                         color: Color(0xFF2979FF),
                       ),
                     ),
@@ -86,7 +106,7 @@ class _LoginPageState extends State<LoginPage> {
                     const SizedBox(height: 6),
                     Text(
                       'Pantau makanan & gula darah Anda',
-                      style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+                      style: TextStyle(fontSize: 13, color: Colors.grey),
                     ),
                   ],
                 ),
@@ -105,7 +125,7 @@ class _LoginPageState extends State<LoginPage> {
 
               const SizedBox(height: 16),
 
-              // Kata Sandi
+              // Password
               _buildLabel('Kata Sandi'),
               const SizedBox(height: 8),
               TextField(
@@ -117,48 +137,79 @@ class _LoginPageState extends State<LoginPage> {
                       _sembunyikanPassword
                           ? Icons.visibility_off_outlined
                           : Icons.visibility_outlined,
-                      color: Colors.grey[400],
-                      size: 20,
+                      color: Colors.grey,
                     ),
-                    onPressed: () => setState(() => _sembunyikanPassword = !_sembunyikanPassword),
+                    onPressed: () {
+                      setState(() {
+                        _sembunyikanPassword = !_sembunyikanPassword;
+                      });
+                    },
                   ),
                 ),
               ),
 
               const SizedBox(height: 28),
 
-              // Tombol Masuk
+              // Tombol Login
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
+                  onPressed: _sedangMemuat ? null : _handleLogin,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2979FF),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
-                  onPressed: _sedangMemuat ? null : _handleLogin,
                   child: _sedangMemuat
                       ? const SizedBox(
-                          height: 20, width: 20,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
                         )
-                      : const Text('MASUK', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                      : const Text(
+                          'MASUK',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
                 ),
               ),
 
               const SizedBox(height: 20),
 
-              // Link Daftar
+              // Register
               Center(
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text('Belum punya akun? ', style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+                    Text(
+                      'Belum punya akun? ',
+                      style: TextStyle(color: Colors.grey),
+                    ),
                     GestureDetector(
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterPage())),
-                      child: const Text('Daftar', style: TextStyle(fontSize: 13, color: Color(0xFF2979FF), fontWeight: FontWeight.w600)),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const RegisterPage(),
+                          ),
+                        );
+                      },
+                      child: const Text(
+                        'Daftar',
+                        style: TextStyle(
+                          color: Color(0xFF2979FF),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -171,17 +222,24 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Widget _buildLabel(String teks) {
-    return Text(teks, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A)));
+    return Text(
+      teks,
+      style: const TextStyle(
+        fontWeight: FontWeight.w600,
+      ),
+    );
   }
 
   InputDecoration _inputDecoration(String hint) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey[300]!)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey[300]!)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF2979FF))),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 14,
+      ),
     );
   }
 }

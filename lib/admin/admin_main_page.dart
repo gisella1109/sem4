@@ -3,6 +3,7 @@ import 'admin_main_page.dart';
 import 'admin_pasien_page.dart';
 import 'admin_artikel_page.dart';
 import 'admin_monitor_page.dart';
+import 'admin_beranda_page.dart';
 
 class AdminMainPage extends StatefulWidget {
   const AdminMainPage({super.key});
