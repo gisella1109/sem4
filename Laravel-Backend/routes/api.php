@@ -1,35 +1,42 @@
 <?php
-
+use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\FoodController;
+use App\Http\Controllers\Api\FoodLogController;
+use App\Http\Controllers\Api\GulaDarahController;
+use App\Http\Controllers\Api\ChatController;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\GlucoseController;
-use App\Http\Controllers\MedicationController;
-use App\Http\Controllers\ArtikelController;
-use App\Http\Controllers\OTPController;
 
-// TEST (biar cek jalan)
-Route::get('/test', function () {
-    return "API jalan";
-});
-
-// AUTH
-Route::post('/login', [AuthController::class, 'login']);
+// ==================== AUTH (Public) ====================
 Route::post('/register', [AuthController::class, 'register']);
+Route::post('/login',    [AuthController::class, 'login']);
 
-// GLUCOSE
-Route::get('/glucose', [GlucoseController::class, 'get']);
-Route::post('/glucose', [GlucoseController::class, 'tambah']);
-Route::post('/glucose/delete', [GlucoseController::class, 'delete']);
+// ==================== Protected (Perlu Token) ====================
+Route::middleware('auth:sanctum')->group(function () {
 
-// MEDICATION
-Route::get('/medication', [MedicationController::class, 'get']);
-Route::post('/medication', [MedicationController::class, 'tambah']);
-Route::post('/medication/delete', [MedicationController::class, 'delete']);
+    // Auth
+    Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/me',      [AuthController::class, 'me']);
 
-//  ARTIKEL
-Route::get('/artikel', [ArtikelController::class, 'index']);
-Route::post('/artikel', [ArtikelController::class, 'store']);
+    // Foods (read only - data dari seed)
+    Route::get('/foods',        [FoodController::class, 'index']);
+    Route::get('/foods/low-gi', [FoodController::class, 'lowGI']);
+    Route::get('/foods/{id}',   [FoodController::class, 'show']);
 
-// OTP
-Route::post('/send-otp', [OTPController::class, 'sendOTP']);
-Route::post('/verify-otp', [OTPController::class, 'verifyOTP']);
+    // Food Log
+    Route::get('/food-logs',        [FoodLogController::class, 'index']);
+    Route::post('/food-logs',       [FoodLogController::class, 'store']);
+    Route::delete('/food-logs/{id}',[FoodLogController::class, 'destroy']);
+
+    // Gula Darah
+    Route::get('/gula-darah',        [GulaDarahController::class, 'index']);
+    Route::post('/gula-darah',       [GulaDarahController::class, 'store']);
+    Route::delete('/gula-darah/{id}',[GulaDarahController::class, 'destroy']);
+
+    // Chat Komunitas
+    Route::get('/users',                                  [ChatController::class, 'daftarUser']);
+    Route::get('/chat/rooms',                             [ChatController::class, 'daftarRoom']);
+    Route::post('/chat/rooms',                            [ChatController::class, 'bukaRoom']);
+    Route::get('/chat/rooms/{roomId}/messages',           [ChatController::class, 'getPesan']);
+    Route::post('/chat/rooms/{roomId}/messages',          [ChatController::class, 'kirimPesan']);
+    Route::get('/chat/unread',                            [ChatController::class, 'totalBelumDibaca']);
+});

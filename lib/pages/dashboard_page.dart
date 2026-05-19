@@ -14,6 +14,7 @@ import 'insulin_tracker_page.dart';
 import 'notifikasi_page.dart';
 import 'manual_food_log_page.dart';
 import 'artikel_edukasi_page.dart';
+import 'chat_list_page.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -372,6 +373,7 @@ class _DashboardPageState extends State<DashboardPage> {
       {'ikon': Icons.vaccines_outlined, 'warna': const Color(0xFF00BFA5), 'bg': const Color(0xFFE0F2F1), 'judul': 'Pelacak Insulin', 'subjudul': '8 unit menunggu untuk makan malam', 'halaman': const InsulinTrackerPage()},
       {'ikon': Icons.edit_note_outlined, 'warna': const Color(0xFFFF7043), 'bg': const Color(0xFFFBE9E7), 'judul': 'Catat Makanan Manual', 'subjudul': 'Input makanan tanpa foto', 'halaman': const CatatanMakananManualPage()},
       {'ikon': Icons.emoji_events_outlined, 'warna': const Color(0xFFFFB300), 'bg': const Color(0xFFFFF8E1), 'judul': 'Hadiah & Poin', 'subjudul': '750/1000 poin • Level 5', 'halaman': const RewardsPage()},
+      {'ikon': Icons.chat_bubble_outline, 'warna': const Color(0xFF8E24AA), 'bg': const Color(0xFFF3E5F5), 'judul': 'Komunitas Chat', 'subjudul': 'Chat dengan sesama pasien diabetes', 'halaman': const ChatListPage()},
     ];
 
     return Padding(

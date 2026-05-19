@@ -1,5 +1,5 @@
 name: glucoguide
-description: Aplikasi Food Log untuk pasien diabetes
+description: "Aplikasi Food Log untuk pasien diabetes"
 version: 1.0.0+1
 publish_to: 'none'
 
@@ -10,17 +10,34 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # UI
   cupertino_icons: ^1.0.8
+
+  # Database & Storage
   sqflite: ^2.3.3
   path: ^1.9.0
   shared_preferences: ^2.3.3
+
+  # Image & Camera
   image_picker: ^1.0.7
+
+  # Environment Variables (API Keys)
   flutter_dotenv: ^5.1.0
+
+  # Utilities
   uuid: ^4.4.0
   intl: ^0.19.0
+
+  # State Management
   provider: ^6.1.2
+
+  # Networking
   http: ^1.1.0
+
+  # Notifications
   flutter_local_notifications: ^18.0.1
+
+  # Charts
   fl_chart: ^0.66.0
 
 dev_dependencies:
@@ -32,5 +49,5 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/env/.env
-    - assets/images/logo_foodlog.png
+    - .env               # Wajib: API keys (GOOGLE_VISION, CALORIE_NINJA)
+    - assets/images/logo_foodlog.png # Logo splash & intro screen

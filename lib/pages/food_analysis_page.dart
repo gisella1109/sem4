@@ -168,7 +168,14 @@ class _FoodAnalysisPageState extends State<FoodAnalysisPage> {
       'food_id': _foodData!['id'],
       'gram': widget.porsiGram ?? 250,
       'waktu_makan': widget.waktuMakan,
-      'foto_path': widget.fotoPath,
+      // Simpan nama & nutrisi manual agar riwayat tetap tampil
+      // meski food_id tidak cocok di tabel foods
+      'nama_manual': _foodData!['nama'] ?? widget.namaMakanan,
+      'emoji_manual': _foodData!['emoji'] ?? '🍽',
+      'kalori_manual': _kaloriPerPorsi,
+      'karbo_manual': ((_foodData!['karbo_100g'] ?? 0) as num).toDouble() * ((widget.porsiGram ?? 250) / 100),
+      'gula_manual': ((_foodData!['gula_100g'] ?? 0) as num).toDouble() * ((widget.porsiGram ?? 250) / 100),
+      'catatan': null,
       'dicatat_pada': DateFormat('yyyy-MM-dd HH:mm:ss').format(now),
     };
     

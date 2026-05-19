@@ -1,59 +1,74 @@
 <?php
+namespace App\Http\Controllers\Api;
 
-namespace App\Http\Controllers;
-
+use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
 {
-    // LOGIN
-    public function login(Request $req)
+    // POST /api/register
+    public function register(Request $request)
     {
-        // ambil user berdasarkan email dulu
-        $user = DB::table('users')
-            ->where('email', $req->email)
-            ->first();
+        $request->validate([
+            'nama'     => 'required|string|max:255',
+            'email'    => 'required|email|unique:users,email',
+            'password' => 'required|min:6',
+        ]);
 
-        // cek user & password hash
-        if ($user && Hash::check($req->password, $user->password)) {
-            return response()->json([
-                "status" => "success",
-                "role" => $user->role,
-                "nama" => $user->name
-            ]);
-        }
+        $user = User::create([
+            'nama'     => $request->nama,
+            'email'    => $request->email,
+            'password' => Hash::make($request->password),
+            'role'     => 'pasien',
+        ]);
+
+        $token = $user->createToken('glucoguide')->plainTextToken;
 
         return response()->json([
-            "status" => "error"
+            'success' => true,
+            'token'   => $token,
+            'user'    => $user,
+        ], 201);
+    }
+
+    // POST /api/login
+    public function login(Request $request)
+    {
+        $request->validate([
+            'email'    => 'required|email',
+            'password' => 'required',
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user || !Hash::check($request->password, $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Email atau password salah',
+            ], 401);
+        }
+
+        $token = $user->createToken('glucoguide')->plainTextToken;
+
+        return response()->json([
+            'success' => true,
+            'token'   => $token,
+            'user'    => $user,
         ]);
     }
 
-    // REGISTER
-    public function register(Request $req)
+    // POST /api/logout
+    public function logout(Request $request)
     {
-        // cek email sudah ada atau belum
-        $cek = DB::table('users')
-            ->where('email', $req->email)
-            ->first();
+        $request->user()->currentAccessToken()->delete();
+        return response()->json(['success' => true, 'message' => 'Logout berhasil']);
+    }
 
-        if ($cek) {
-            return response()->json([
-                "status" => "email_sudah_ada"
-            ]);
-        }
-
-        // insert user baru (password di-hash)
-        DB::table('users')->insert([
-            "name" => $req->nama,
-            "email" => $req->email,
-            "password" => Hash::make($req->password),
-            "role" => "pasien"
-        ]);
-
-        return response()->json([
-            "status" => "success"
-        ]);
+    // GET /api/me
+    public function me(Request $request)
+    {
+        return response()->json(['success' => true, 'user' => $request->user()]);
     }
 }

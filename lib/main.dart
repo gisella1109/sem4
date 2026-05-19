@@ -1,44 +1,70 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'pages/login_page.dart';
+import 'pages/intro_screen_page.dart';
 import 'services/notification_service.dart';
 import 'database/database_helper.dart';
 
+import 'package:flutter/rendering.dart';  
 
 void main() async {
-  // Wajib sebelum init plugin dan async operations
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 🔥 Load environment variables (.env file)
-  await dotenv.load(fileName: "assets/env/.env");
-  // 🔥 Inisialisasi database
+  // Load ENV
+  await dotenv.load(fileName: ".env");
+
+  PaintingBinding.instance.imageCache.maximumSize = 50;
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 50 << 20;
+
+  // Init database hanya untuk mobile/desktop
   if (!kIsWeb) {
     await DatabaseHelper.instance.database;
   }
 
-  // Init push notification service
+  // Init notification
   await NotificationService().init();
 
-  runApp(const AplikasiKu());
+  // Cek intro screen
+  final prefs = await SharedPreferences.getInstance();
+  final sudahLihatIntro =
+      prefs.getBool('sudahLihatIntro') ?? false;
+
+  runApp(
+    AplikasiKu(
+      tampilkanIntro: !sudahLihatIntro,
+    ),
+  );
 }
 
 class AplikasiKu extends StatelessWidget {
-  const AplikasiKu({super.key});
+  final bool tampilkanIntro;
+
+  const AplikasiKu({
+    super.key,
+    required this.tampilkanIntro,
+  });
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'GlucoGuide - Catatan Makan Diabetes',
       debugShowCheckedModeBanner: false,
+
       theme: ThemeData(
+        useMaterial3: true,
+
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF2979FF),
           brightness: Brightness.light,
         ),
-        useMaterial3: true,
-        fontFamily: 'Poppins', // Optional: jika pakai font custom
+
+        fontFamily: 'Poppins',
+
+        scaffoldBackgroundColor: const Color(0xFFF5F7FA),
+
         appBarTheme: const AppBarTheme(
           elevation: 0,
           centerTitle: true,
@@ -46,7 +72,11 @@ class AplikasiKu extends StatelessWidget {
           foregroundColor: Color(0xFF1A1A2E),
         ),
       ),
-      home: const LoginPage(),
+
+      // Halaman awal
+      home: tampilkanIntro
+          ? const IntroScreen()
+          : const LoginPage(),
     );
   }
 }
