@@ -1,7 +1,13 @@
+// ============================================================
+// FILE: manual_food_log_page.dart
+// FUNGSI: Catat makanan manual — pilih porsi pakai satuan
+//         alami (piring, mangkuk, biji, butir, potong, dll)
+//         bukan slider gram. Perhitungan sama dengan foto.
+// ============================================================
+
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../database/database_helper.dart';
-import 'meal_history_page.dart';
+import 'food_analysis_page.dart';
 
 class CatatanMakananManualPage extends StatefulWidget {
   const CatatanMakananManualPage({super.key});
@@ -13,140 +19,144 @@ class CatatanMakananManualPage extends StatefulWidget {
 
 class _CatatanMakananManualPageState
     extends State<CatatanMakananManualPage> {
-  final _namaController = TextEditingController();
-  final _sendokController = TextEditingController(text: '0');
-  final _beratController = TextEditingController(text: '100');
-  final _catatanController = TextEditingController();
+  final _searchController = TextEditingController();
 
-  double _porsiDipilih = 1.0;
-  String _satuanDipilih = 'Porsi';
+  int _jumlahPorsi = 1;       // 1–5
   int _waktuMakanDipilih = 0;
-  bool _sedangMenyimpan = false;
+  bool _isSearching = false;
 
-  final List<double> _daftarPorsi = [0.5, 1.0, 2.0];
-  final List<String> _daftarSatuan = ['Piring', 'Porsi', 'Mangkok'];
-  final List<Map<String, dynamic>> _daftarWaktu = [
-    {'label': 'Sarapan', 'ikon': Icons.wb_sunny_outlined},
-    {'label': 'Siang', 'ikon': Icons.wb_twilight_outlined},
-    {'label': 'Malam', 'ikon': Icons.nights_stay_outlined},
-    {'label': 'Cemilan', 'ikon': Icons.cookie_outlined},
+  List<Map<String, dynamic>> _searchResults = [];
+  Map<String, dynamic>? _selectedFood;
+
+  final List<Map<String, dynamic>> _daftarWaktuMakan = const [
+    {'label': 'Sarapan', 'ikon': Icons.wb_sunny_outlined,  'waktu': '06:00-09:00'},
+    {'label': 'Siang',   'ikon': Icons.wb_sunny,            'waktu': '11:00-13:00'},
+    {'label': 'Malam',   'ikon': Icons.dark_mode,           'waktu': '18:00-20:00'},
+    {'label': 'Cemilan', 'ikon': Icons.cookie_outlined,     'waktu': '10:00 & 15:00'},
   ];
 
-  // Estimasi kalori sederhana per gram berdasarkan porsi
-  double get _estimasiKalori {
-    final gram = double.tryParse(_beratController.text) ?? 100;
-    // Estimasi rata-rata makanan Indonesia: ~1.5 kkal/gram
-    return gram * 1.5 * _porsiDipilih;
+  // ── Mapping satuan & gram-per-satuan berdasarkan makanan ──
+  Map<String, dynamic> _getSatuan(Map<String, dynamic> food) {
+    final nama = (food['nama'] as String).toLowerCase();
+    final kategori = (food['kategori'] as String).toLowerCase();
+
+    // Masakan berkuah → mangkuk
+    if (nama.contains('soto') || nama.contains('bakso') ||
+        nama.contains('sup') || nama.contains('rawon') ||
+        nama.contains('opor') || nama.contains('gulai') ||
+        nama.contains('sop')) {
+      return {'satuan': 'mangkuk', 'ikon': '🥣', 'gram': 350.0};
+    }
+
+    // Makanan pokok / nasi / mie → piring
+    if (nama.contains('nasi') || nama.contains('mie') ||
+        nama.contains('bihun') || nama.contains('lontong') ||
+        nama.contains('ketupat') || nama.contains('gado') ||
+        nama.contains('goreng') || nama.contains('bakar') ||
+        nama.contains('rendang') || nama.contains('pecel') ||
+        kategori == 'masakan') {
+      return {'satuan': 'piring', 'ikon': '🍽️', 'gram': 300.0};
+    }
+
+    // Roti → lembar
+    if (nama.contains('roti')) {
+      return {'satuan': 'lembar', 'ikon': '🍞', 'gram': 35.0};
+    }
+
+    // Telur → butir
+    if (nama.contains('telur')) {
+      return {'satuan': 'butir', 'ikon': '🥚', 'gram': 55.0};
+    }
+
+    // Buah besar (per buah)
+    if (nama.contains('pisang') || nama.contains('apel') ||
+        nama.contains('jeruk') || nama.contains('mangga') ||
+        nama.contains('pepaya') || nama.contains('alpukat')) {
+      return {'satuan': 'buah', 'ikon': '🍎', 'gram': 120.0};
+    }
+
+    // Buah biji kecil (anggur, dll)
+    if (nama.contains('anggur') || nama.contains('semangka')) {
+      return {'satuan': 'biji', 'ikon': '🍇', 'gram': 15.0};
+    }
+
+    // Tahu tempe → potong
+    if (nama.contains('tahu') || nama.contains('tempe')) {
+      return {'satuan': 'potong', 'ikon': '🟫', 'gram': 50.0};
+    }
+
+    // Ayam / daging / ikan → potong
+    if (kategori == 'protein' || nama.contains('ayam') ||
+        nama.contains('daging') || nama.contains('ikan') ||
+        nama.contains('udang')) {
+      return {'satuan': 'potong', 'ikon': '🍗', 'gram': 80.0};
+    }
+
+    // Sayuran → porsi
+    if (kategori == 'sayuran') {
+      return {'satuan': 'porsi', 'ikon': '🥬', 'gram': 100.0};
+    }
+
+    // Default → porsi
+    return {'satuan': 'porsi', 'ikon': '🍽️', 'gram': 150.0};
   }
 
-  double get _estimasiKarbo {
-    final gram = double.tryParse(_beratController.text) ?? 100;
-    // Estimasi rata-rata karbo: ~0.3g/gram makanan
-    return gram * 0.3 * _porsiDipilih;
+  // ── Hitung total gram dari jumlah porsi ───────────────────
+  double get _totalGram {
+    if (_selectedFood == null) return 0;
+    final gramPerSatuan = _getSatuan(_selectedFood!)['gram'] as double;
+    return gramPerSatuan * _jumlahPorsi;
   }
 
   @override
   void dispose() {
-    _namaController.dispose();
-    _sendokController.dispose();
-    _beratController.dispose();
-    _catatanController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _simpan() async {
-    final nama = _namaController.text.trim();
-    if (nama.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Nama makanan tidak boleh kosong'),
-            backgroundColor: Colors.redAccent),
-      );
+  Future<void> _searchFood() async {
+    final query = _searchController.text.trim();
+    if (query.isEmpty) {
+      setState(() { _searchResults = []; _isSearching = false; });
+      return;
+    }
+    setState(() => _isSearching = true);
+    final results = await DatabaseHelper.instance.searchFoods(query);
+    setState(() { _searchResults = results; _isSearching = false; });
+  }
+
+  void _pilihMakanan(Map<String, dynamic> food) {
+    setState(() {
+      _selectedFood = food;
+      _jumlahPorsi = 1;
+      _searchController.text = food['nama'];
+      _searchResults = [];
+    });
+  }
+
+  Future<void> _simpanDanAnalisis() async {
+    if (_selectedFood == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Silakan pilih makanan terlebih dahulu'),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ));
       return;
     }
 
-    setState(() => _sedangMenyimpan = true);
-
-    try {
-      final db = DatabaseHelper.instance;
-      final now = DateTime.now();
-      final id = '${now.millisecondsSinceEpoch}_manual';
-      final gram = double.tryParse(_beratController.text) ?? 100;
-      final waktuMakan =
-          _daftarWaktu[_waktuMakanDipilih]['label'] as String;
-
-      // Simpan ke food_log dengan kolom manual (tanpa food_id)
-      await db.insertFoodLog({
-        'id': id,
-        'food_id': null, // null karena ini input manual
-        'gram': gram * _porsiDipilih,
-        'waktu_makan': waktuMakan,
-        'nama_manual': nama,
-        'emoji_manual': _emojiWaktu(waktuMakan),
-        'kalori_manual': _estimasiKalori,
-        'karbo_manual': _estimasiKarbo,
-        'catatan': _catatanController.text.trim(),
-        'satuan': _satuanDipilih,
-        'porsi': _porsiDipilih,
-        'dicatat_pada': DateFormat('yyyy-MM-dd HH:mm:ss').format(now),
-      });
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  '$nama berhasil disimpan! (~${_estimasiKalori.toStringAsFixed(0)} kkal)',
-                  style: const TextStyle(fontSize: 13),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: const Color(0xFF2979FF),
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FoodAnalysisPage(
+          namaMakanan: _selectedFood!['nama'],
+          waktuMakan:  _daftarWaktuMakan[_waktuMakanDipilih]['label'] as String,
+          porsiGram:   _totalGram,
+          foodId:      _selectedFood!['id'],
+          imageBytes:  null,
+          foodData:    _selectedFood,
         ),
-      );
-
-      await Future.delayed(const Duration(milliseconds: 800));
-      if (!mounted) return;
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MealHistoryPage()),
-      );
-    } catch (e) {
-      setState(() => _sedangMenyimpan = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Gagal menyimpan: $e'),
-              backgroundColor: Colors.redAccent),
-        );
-      }
-    }
-  }
-
-  String _emojiWaktu(String waktu) {
-    switch (waktu) {
-      case 'Sarapan':
-        return '🌅';
-      case 'Siang':
-        return '🍽';
-      case 'Malam':
-        return '🌙';
-      case 'Cemilan':
-        return '🍪';
-      default:
-        return '🍽';
-    }
+      ),
+    );
   }
 
   @override
@@ -160,11 +170,10 @@ class _CatatanMakananManualPageState
           icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A2E)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Catat Makanan Manual',
-            style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1A1A2E))),
+        title: const Text(
+          'Catat Makanan Manual',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+        ),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
@@ -172,381 +181,433 @@ class _CatatanMakananManualPageState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 16),
-
-            // Nama Makanan
-            _label('Nama Makanan'),
-            const SizedBox(height: 8),
-            _inputField(_namaController, 'Contoh: Nasi Goreng'),
+            const SizedBox(height: 12),
+            _buildBanner(),
             const SizedBox(height: 20),
-
-            // Porsi - angka
-            _label('Porsi'),
-            const SizedBox(height: 10),
-            Row(
-              children: _daftarPorsi.map((p) {
-                final dipilih = _porsiDipilih == p;
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _porsiDipilih = p),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 160),
-                      margin: EdgeInsets.only(right: p != 2.0 ? 10 : 0),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        color: dipilih
-                            ? const Color(0xFFE8F0FE)
-                            : Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: dipilih
-                              ? const Color(0xFF2979FF)
-                              : Colors.grey[300]!,
-                          width: dipilih ? 1.5 : 1,
-                        ),
-                      ),
-                      child: Text(
-                        p == 0.5 ? '0.5' : p.toInt().toString(),
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: dipilih
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                          color: dipilih
-                              ? const Color(0xFF2979FF)
-                              : Colors.grey[600],
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 10),
-
-            // Satuan porsi
-            Row(
-              children: _daftarSatuan.map((s) {
-                final dipilih = _satuanDipilih == s;
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _satuanDipilih = s),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 160),
-                      margin: EdgeInsets.only(
-                          right: s != 'Mangkok' ? 10 : 0),
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      decoration: BoxDecoration(
-                        color: dipilih
-                            ? const Color(0xFFE8F0FE)
-                            : Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: dipilih
-                              ? const Color(0xFF2979FF)
-                              : Colors.grey[300]!,
-                          width: dipilih ? 1.5 : 1,
-                        ),
-                      ),
-                      child: Text(
-                        s,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: dipilih
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                          color: dipilih
-                              ? const Color(0xFF2979FF)
-                              : Colors.grey[600],
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
+            _buildPencarian(),
+            const SizedBox(height: 12),
+            if (_searchResults.isNotEmpty) _buildHasilPencarian(),
+            if (_selectedFood != null) ...[
+              const SizedBox(height: 8),
+              _buildMakananTerpilih(),
+              const SizedBox(height: 20),
+              _buildPilihPorsi(),
+            ],
             const SizedBox(height: 20),
-
-            // Waktu Makan
-            _label('Waktu Makan'),
+            _buildWaktuMakan(),
+            const SizedBox(height: 24),
+            _buildTombolSimpan(),
             const SizedBox(height: 10),
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: 3.0,
-              children: List.generate(_daftarWaktu.length, (i) {
-                final dipilih = _waktuMakanDipilih == i;
-                return GestureDetector(
-                  onTap: () =>
-                      setState(() => _waktuMakanDipilih = i),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    decoration: BoxDecoration(
-                      color: dipilih
-                          ? const Color(0xFFE8F0FE)
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: dipilih
-                            ? const Color(0xFF2979FF)
-                            : Colors.grey[300]!,
-                        width: dipilih ? 1.5 : 1,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(_daftarWaktu[i]['ikon'] as IconData,
-                            size: 18,
-                            color: dipilih
-                                ? const Color(0xFF2979FF)
-                                : Colors.grey[500]),
-                        const SizedBox(width: 8),
-                        Text(
-                          _daftarWaktu[i]['label'] as String,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: dipilih
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                            color: dipilih
-                                ? const Color(0xFF2979FF)
-                                : Colors.grey[700],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }),
-            ),
-            const SizedBox(height: 20),
-
-            // Takaran Porsi
-            _label('Takaran Porsi'),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Jumlah Sendok',
-                          style: TextStyle(
-                              fontSize: 12, color: Colors.grey[500])),
-                      const SizedBox(height: 6),
-                      _inputFieldNum(_sendokController),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Berat (Gram)',
-                          style: TextStyle(
-                              fontSize: 12, color: Colors.grey[500])),
-                      const SizedBox(height: 6),
-                      _inputFieldNum(_beratController,
-                          onChanged: (_) => setState(() {})),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Preview estimasi nutrisi
-            AnimatedBuilder(
-              animation: _beratController,
-              builder: (context, _) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE8F0FE),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildEstimasi(
-                          '~${_estimasiKalori.toStringAsFixed(0)}',
-                          'kkal',
-                          const Color(0xFF2979FF)),
-                      Container(
-                          width: 1,
-                          height: 30,
-                          color: const Color(0xFF2979FF)
-                              .withValues(alpha: 0.3)),
-                      _buildEstimasi(
-                          '~${_estimasiKarbo.toStringAsFixed(0)}g',
-                          'karbo',
-                          Colors.orange),
-                    ],
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 4),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
+            Center(
               child: Text(
-                '* Estimasi otomatis. Gunakan fitur foto untuk nutrisi akurat.',
-                style: TextStyle(fontSize: 10, color: Colors.grey[400]),
+                '🔍 Cari makanan → pilih jumlah → kalori dihitung otomatis',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Colors.grey[500], fontStyle: FontStyle.italic),
               ),
             ),
-            const SizedBox(height: 20),
-
-            // Catatan
-            _label('Catatan'),
-            const SizedBox(height: 8),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.03),
-                      blurRadius: 6)
-                ],
-              ),
-              child: TextField(
-                controller: _catatanController,
-                maxLines: 4,
-                decoration: InputDecoration(
-                  hintText: 'Tambahkan detail tambahan...',
-                  hintStyle: TextStyle(
-                      color: Colors.grey[400], fontSize: 13),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none),
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.all(16),
-                ),
-              ),
-            ),
-            const SizedBox(height: 28),
-
-            // Tombol Simpan
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2979FF),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
-                  elevation: 2,
-                  shadowColor: const Color(0x442979FF),
-                ),
-                onPressed: _sedangMenyimpan ? null : _simpan,
-                icon: _sedangMenyimpan
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
-                    : const Icon(Icons.save_outlined, size: 20),
-                label: Text(
-                  _sedangMenyimpan
-                      ? 'Menyimpan...'
-                      : 'Simpan Makanan',
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 100),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildEstimasi(String nilai, String satuan, Color warna) {
+  // ── Banner ────────────────────────────────────────────────
+  Widget _buildBanner() {
+    return Container(
+      width: double.infinity,
+      height: 160,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1565C0), Color(0xFF2979FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Stack(
+        children: [
+          Positioned(top: -20, right: -20,
+            child: Container(width: 100, height: 100,
+              decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), shape: BoxShape.circle))),
+          Positioned(bottom: -30, left: -10,
+            child: Container(width: 120, height: 120,
+              decoration: BoxDecoration(color: Colors.white.withOpacity(0.06), shape: BoxShape.circle))),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  width: 72, height: 72,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Icon(Icons.edit_note_rounded, size: 40, color: Colors.white),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text('Input Manual', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                      SizedBox(height: 6),
+                      Text(
+                        'Cari makanan → pilih jumlah piring/mangkuk/biji → kalori dihitung otomatis',
+                        style: TextStyle(fontSize: 12, color: Colors.white70, height: 1.4),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            bottom: 12, right: 14,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.calculate_outlined, size: 13, color: Colors.white),
+                  SizedBox(width: 4),
+                  Text('Auto Hitung', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Pencarian ─────────────────────────────────────────────
+  Widget _buildPencarian() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(nilai,
-            style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: warna)),
-        Text(satuan,
-            style:
-                TextStyle(fontSize: 11, color: Colors.grey[600])),
+        const Text('Cari Makanan',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2))],
+          ),
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Cari: Nasi Goreng, Bakso, Ayam Bakar...',
+              hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+              border: InputBorder.none,
+              filled: true, fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              prefixIcon: const Icon(Icons.search, size: 20, color: Colors.grey),
+              suffixIcon: _isSearching
+                  ? const Padding(padding: EdgeInsets.all(12),
+                      child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                  : _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() { _searchResults = []; _selectedFood = null; });
+                          })
+                      : null,
+            ),
+            onChanged: (_) => _searchFood(),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _label(String teks) => Text(teks,
-      style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
-          color: Color(0xFF1A1A2E)));
+  // ── Hasil pencarian ───────────────────────────────────────
+  Widget _buildHasilPencarian() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Column(
+        children: _searchResults.map((food) {
+          final satuan = _getSatuan(food);
+          return ListTile(
+            leading: Text(food['emoji'] ?? '🍽️', style: const TextStyle(fontSize: 24)),
+            title: Text(food['nama'], style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text(
+              '${food['kalori_100g']} kal/100g  •  per ${satuan['satuan']}: ~${(satuan['gram'] as double).toInt()}g',
+              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+            ),
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEAF2FF),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(satuan['ikon'] as String, style: const TextStyle(fontSize: 16)),
+            ),
+            onTap: () => _pilihMakanan(food),
+          );
+        }).toList(),
+      ),
+    );
+  }
 
-  Widget _inputField(TextEditingController ctrl, String hint) =>
-      Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 6)
+  // ── Makanan terpilih ──────────────────────────────────────
+  Widget _buildMakananTerpilih() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF2FF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF2979FF), width: 1.5),
+      ),
+      child: Row(
+        children: [
+          Text(_selectedFood!['emoji'] ?? '🍽️', style: const TextStyle(fontSize: 28)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_selectedFood!['nama'],
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1A2340))),
+                Text(
+                  '${_selectedFood!['kalori_100g']} kal/100g  •  IG: ${_selectedFood!['indeks_glikemik']}',
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit, color: Color(0xFF2979FF), size: 20),
+            onPressed: () => setState(() { _selectedFood = null; _searchController.clear(); }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Pilih porsi (1–5 dengan satuan alami) ─────────────────
+  Widget _buildPilihPorsi() {
+    if (_selectedFood == null) return const SizedBox();
+
+    final satuan    = _getSatuan(_selectedFood!);
+    final namaS     = satuan['satuan'] as String;
+    final ikonS     = satuan['ikon'] as String;
+    final gramPerS  = satuan['gram'] as double;
+    final totalGram = gramPerS * _jumlahPorsi;
+
+    // Hitung nutrisi preview
+    final kalori  = (_selectedFood!['kalori_100g']  as num) * totalGram / 100;
+    final karbo   = (_selectedFood!['karbo_100g']   as num) * totalGram / 100;
+    final protein = (_selectedFood!['protein_100g'] as num) * totalGram / 100;
+    final lemak   = (_selectedFood!['lemak_100g']   as num) * totalGram / 100;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(ikonS, style: const TextStyle(fontSize: 20)),
+            const SizedBox(width: 8),
+            Text(
+              'Berapa $namaS?',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2979FF).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '~${totalGram.toInt()} gram',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF2979FF)),
+              ),
+            ),
           ],
         ),
-        child: TextField(
-          controller: ctrl,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle:
-                TextStyle(color: Colors.grey[400], fontSize: 14),
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 14),
-          ),
-        ),
-      );
+        const SizedBox(height: 14),
 
-  Widget _inputFieldNum(TextEditingController ctrl,
-          {Function(String)? onChanged}) =>
-      Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 6)
-          ],
+        // Tombol pilih jumlah 1–5
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: List.generate(5, (i) {
+            final angka   = i + 1;
+            final dipilih = _jumlahPorsi == angka;
+            return GestureDetector(
+              onTap: () => setState(() => _jumlahPorsi = angka),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 56, height: 72,
+                decoration: BoxDecoration(
+                  color: dipilih ? const Color(0xFF2979FF) : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: dipilih ? const Color(0xFF2979FF) : Colors.grey.shade300,
+                    width: dipilih ? 2 : 1,
+                  ),
+                  boxShadow: dipilih
+                      ? [const BoxShadow(color: Color(0x442979FF), blurRadius: 10, offset: Offset(0, 4))]
+                      : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6)],
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(ikonS, style: const TextStyle(fontSize: 20)),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$angka',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: dipilih ? Colors.white : const Color(0xFF1A1A2E),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
         ),
-        child: TextField(
-          controller: ctrl,
-          keyboardType: TextInputType.number,
-          onChanged: onChanged,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 14),
+
+        const SizedBox(height: 6),
+        Center(
+          child: Text(
+            '$_jumlahPorsi $namaS  ≈  ${totalGram.toInt()} gram',
+            style: TextStyle(fontSize: 12, color: Colors.grey[500]),
           ),
         ),
-      );
+
+        // Preview nutrisi
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _previewNutrisi('${kalori.toStringAsFixed(0)}', 'KALORI', Colors.blue),
+              _divider(),
+              _previewNutrisi('${karbo.toStringAsFixed(1)}g', 'KARBO', Colors.orange),
+              _divider(),
+              _previewNutrisi('${protein.toStringAsFixed(1)}g', 'PROTEIN', Colors.green),
+              _divider(),
+              _previewNutrisi('${lemak.toStringAsFixed(1)}g', 'LEMAK', Colors.red),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        Center(
+          child: Text(
+            'per $_jumlahPorsi $namaS (${totalGram.toInt()}g)',
+            style: TextStyle(fontSize: 11, color: Colors.grey[400]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Waktu makan ───────────────────────────────────────────
+  Widget _buildWaktuMakan() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Waktu Makan',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
+        const SizedBox(height: 10),
+        GridView.count(
+          crossAxisCount: 2,
+          crossAxisSpacing: 10, mainAxisSpacing: 10,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: 2.5,
+          children: List.generate(_daftarWaktuMakan.length, (i) {
+            final dipilih = _waktuMakanDipilih == i;
+            return GestureDetector(
+              onTap: () => setState(() => _waktuMakanDipilih = i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                decoration: BoxDecoration(
+                  color: dipilih ? const Color(0xFFEAF2FF) : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: dipilih ? const Color(0xFF2979FF) : Colors.transparent, width: 1.5),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2))],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(_daftarWaktuMakan[i]['ikon'] as IconData, size: 20,
+                        color: dipilih ? const Color(0xFF2979FF) : Colors.grey[500]),
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_daftarWaktuMakan[i]['label'] as String,
+                            style: TextStyle(fontSize: 14,
+                                fontWeight: dipilih ? FontWeight.bold : FontWeight.normal,
+                                color: dipilih ? const Color(0xFF2979FF) : Colors.grey[600])),
+                        Text(_daftarWaktuMakan[i]['waktu'] as String,
+                            style: TextStyle(fontSize: 10,
+                                color: dipilih ? const Color(0xFF2979FF).withOpacity(0.7) : Colors.grey[400])),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ),
+      ],
+    );
+  }
+
+  // ── Tombol simpan ─────────────────────────────────────────
+  Widget _buildTombolSimpan() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF2979FF),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 2,
+          shadowColor: const Color(0x442979FF),
+        ),
+        onPressed: _simpanDanAnalisis,
+        icon: const Icon(Icons.save_outlined, size: 20),
+        label: const Text('Simpan & Analisis',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  Widget _previewNutrisi(String nilai, String label, Color warna) {
+    return Column(
+      children: [
+        Text(nilai, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: warna)),
+        const SizedBox(height: 2),
+        Text(label, style: TextStyle(fontSize: 9, color: Colors.grey[500], fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+      ],
+    );
+  }
+
+  Widget _divider() => Container(width: 1, height: 30, color: Colors.grey[200]);
 }

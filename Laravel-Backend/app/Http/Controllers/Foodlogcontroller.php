@@ -1,96 +1,170 @@
 <?php
-namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+namespace App\Http\Controllers;
+
 use App\Models\FoodLog;
 use Illuminate\Http\Request;
 
 class FoodLogController extends Controller
 {
     // GET /api/food-logs
+    // Ambil semua log makanan (bisa filter by user_id, meal_time, tanggal)
     public function index(Request $request)
     {
-        $query = FoodLog::with('food')
-            ->where('user_id', $request->user()->id);
+        $query = FoodLog::query();
 
-        if ($request->filled('tanggal')) {
-            $query->whereDate('dicatat_pada', $request->tanggal);
+        // Filter user
+        if ($request->has('user_id')) {
+            $query->where('user_id', $request->user_id);
         }
 
-        $logs = $query->orderByDesc('dicatat_pada')->get();
-
-        // Hitung total nutrisi hari ini
-        $today = now()->toDateString();
-        $totalHariIni = FoodLog::where('user_id', $request->user()->id)
-            ->whereDate('dicatat_pada', $today)
-            ->with('food')
-            ->get();
-
-        $summary = [
-            'total_kalori' => 0,
-            'total_karbo'  => 0,
-            'total_gula'   => 0,
-            'total_protein'=> 0,
-        ];
-
-        foreach ($totalHariIni as $log) {
-            $gram = $log->gram ?? 100;
-            $f    = $log->food;
-
-            $summary['total_kalori']  += $log->kalori_manual ?? ($f ? $f->kalori_100g  * $gram / 100 : 0);
-            $summary['total_karbo']   += $log->karbo_manual  ?? ($f ? $f->karbo_100g   * $gram / 100 : 0);
-            $summary['total_gula']    += $log->gula_manual   ?? ($f ? $f->gula_100g    * $gram / 100 : 0);
+        // Filter waktu makan
+        if ($request->has('meal_time')) {
+            $query->where('meal_time', $request->meal_time);
         }
+
+        // Filter tanggal (format: 2026-05-24)
+        if ($request->has('date')) {
+            $query->whereDate('created_at', $request->date);
+        }
+
+        // Filter metode input (manual / photo)
+        if ($request->has('input_method')) {
+            $query->where('input_method', $request->input_method);
+        }
+
+        $logs = $query->orderByDesc('created_at')->get();
+
+        // Hitung total kalori & karbo
+        $totalKalori = $logs->sum('calories');
+        $totalKarbo  = $logs->sum('carbs');
 
         return response()->json([
-            'success' => true,
-            'data'    => $logs,
-            'summary_hari_ini' => $summary,
-            'peringatan_gula'  => $summary['total_gula'] > 25,
+            'status'       => 'success',
+            'data'         => $logs,
+            'total'        => $logs->count(),
+            'total_kalori' => $totalKalori,
+            'total_karbo'  => $totalKarbo,
         ]);
     }
 
     // POST /api/food-logs
+    // Simpan log makanan baru (dari manual ATAU foto)
     public function store(Request $request)
     {
         $request->validate([
-            'id'          => 'required|string',
-            'gram'        => 'required|numeric',
-            'waktu_makan' => 'required|string',
+            'food_name'    => 'required|string|max:255',
+            'meal_time'    => 'required|string',
+            'calories'     => 'required|numeric|min:0',
+            'carbs'        => 'required|numeric|min:0',
+            'portion'      => 'required|numeric|min:0',
+            'portion_unit' => 'required|string|max:100',
+            'input_method' => 'required|in:manual,photo',
+            'user_id'      => 'nullable|exists:users,id',
+            'notes'        => 'nullable|string',
         ]);
 
         $log = FoodLog::create([
-            'id'           => $request->id,
-            'user_id'      => $request->user()->id,
-            'food_id'      => $request->food_id,
-            'gram'         => $request->gram,
-            'waktu_makan'  => $request->waktu_makan,
-            'nama_manual'  => $request->nama_manual,
-            'emoji_manual' => $request->emoji_manual ?? '🍽',
-            'kalori_manual'=> $request->kalori_manual,
-            'karbo_manual' => $request->karbo_manual,
-            'gula_manual'  => $request->gula_manual,
-            'catatan'      => $request->catatan,
-            'satuan'       => $request->satuan,
-            'porsi'        => $request->porsi ?? 1,
-            'dicatat_pada' => $request->dicatat_pada ?? now(),
+            'user_id'      => $request->user_id,
+            'food_name'    => $request->food_name,
+            'meal_time'    => $request->meal_time,
+            'calories'     => (int) round($request->calories),
+            'carbs'        => (int) round($request->carbs),
+            'portion'      => $request->portion,
+            'portion_unit' => $request->portion_unit,
+            'notes'        => $request->notes,
+            'input_method' => $request->input_method,
         ]);
 
-        return response()->json(['success' => true, 'data' => $log], 201);
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Log makanan berhasil disimpan.',
+            'data'    => $log,
+        ], 201);
+    }
+
+    // GET /api/food-logs/{id}
+    public function show($id)
+    {
+        $log = FoodLog::findOrFail($id);
+        return response()->json([
+            'status' => 'success',
+            'data'   => $log,
+        ]);
+    }
+
+    // PUT /api/food-logs/{id}
+    public function update(Request $request, $id)
+    {
+        $log = FoodLog::findOrFail($id);
+
+        $request->validate([
+            'food_name'    => 'sometimes|string|max:255',
+            'meal_time'    => 'sometimes|string',
+            'calories'     => 'sometimes|numeric|min:0',
+            'carbs'        => 'sometimes|numeric|min:0',
+            'portion'      => 'sometimes|numeric|min:0',
+            'portion_unit' => 'sometimes|string|max:100',
+            'notes'        => 'nullable|string',
+        ]);
+
+        $log->update($request->only([
+            'food_name', 'meal_time', 'calories',
+            'carbs', 'portion', 'portion_unit', 'notes',
+        ]));
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Log makanan diperbarui.',
+            'data'    => $log,
+        ]);
     }
 
     // DELETE /api/food-logs/{id}
-    public function destroy(Request $request, $id)
+    public function destroy($id)
     {
-        $log = FoodLog::where('id', $id)
-            ->where('user_id', $request->user()->id)
-            ->first();
+        $log = FoodLog::findOrFail($id);
+        $log->delete();
 
-        if (!$log) {
-            return response()->json(['success' => false, 'message' => 'Data tidak ditemukan'], 404);
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Log makanan dihapus.',
+        ]);
+    }
+
+    // GET /api/food-logs/summary?user_id=1&date=2026-05-24
+    // Ringkasan harian: total kalori, karbo, per waktu makan
+    public function summary(Request $request)
+    {
+        $query = FoodLog::query();
+
+        if ($request->has('user_id')) {
+            $query->where('user_id', $request->user_id);
         }
 
-        $log->delete();
-        return response()->json(['success' => true, 'message' => 'Berhasil dihapus']);
+        $tanggal = $request->date ?? now()->toDateString();
+        $query->whereDate('created_at', $tanggal);
+
+        $logs = $query->orderBy('created_at')->get();
+
+        // Group by waktu makan
+        $perWaktu = $logs->groupBy('meal_time')->map(function ($group, $waktu) {
+            return [
+                'waktu_makan'  => $waktu,
+                'total_kalori' => $group->sum('calories'),
+                'total_karbo'  => $group->sum('carbs'),
+                'jumlah_item'  => $group->count(),
+                'items'        => $group->values(),
+            ];
+        })->values();
+
+        return response()->json([
+            'status'       => 'success',
+            'tanggal'      => $tanggal,
+            'total_kalori' => $logs->sum('calories'),
+            'total_karbo'  => $logs->sum('carbs'),
+            'total_item'   => $logs->count(),
+            'per_waktu'    => $perWaktu,
+        ]);
     }
 }
