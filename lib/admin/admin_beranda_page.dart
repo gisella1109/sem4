@@ -1,12 +1,3 @@
-// ============================================================
-// FILE: admin_beranda_page.dart
-// APLIKASI: DiabеTrack - Panel Admin
-// BAGIAN: Tab 1 - Beranda / Dashboard Admin
-// FUNGSI: Menampilkan statistik total pasien, akun nonaktif,
-//         pasien baru, artikel aktif, aktivitas terbaru,
-//         dan kartu Editorial Insights.
-// ============================================================
-
 import 'package:flutter/material.dart';
 
 class AdminBerandaPage extends StatelessWidget {
