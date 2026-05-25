@@ -8,7 +8,7 @@ class ArtikelService {
 
   static Future<String?> _token() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('auth_token');
+    return prefs.getString('api_token');
   }
 
   static Future<Map<String, String>> _headers() async {

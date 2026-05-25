@@ -1,10 +1,10 @@
 <?php
-use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\FoodController;
-use App\Http\Controllers\Api\FoodLogController;
-use App\Http\Controllers\Api\GulaDarahController;
-use App\Http\Controllers\Api\ChatController;
-use App\Http\Controllers\Api\ArtikelController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\FoodController;
+use App\Http\Controllers\FoodLogController;
+use App\Http\Controllers\GulaDarahController;
+use App\Http\Controllers\ChatController;
+use App\Http\Controllers\ArtikelController;
 use Illuminate\Support\Facades\Route;
 
 // ==================== AUTH (Public) ====================
