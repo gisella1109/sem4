@@ -1,15 +1,21 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-class ApiService {
-  // Ganti dengan IP laptop kamu saat development
-  // Contoh: 'http://192.168.1.5:8000/api'
-  // Untuk emulator Android: 'http://10.0.2.2:8000/api'
-  // Untuk HP fisik: 'http://192.168.X.X:8000/api' (IP laptop kamu)
-  static const String _baseUrl = 'http://10.0.2.2:8000/api';
+import '../models/artikel_model.dart';
+import '../models/food_item.dart';
+import '../models/food_journal.dart';
+import '../models/glucose_entry.dart';
 
+class ApiService {
+  // ─── IP LAPTOP (Wi-Fi) ───────────────────────────────────
+  static const String _baseUrl = 'http://172.16.1.252:8000/api';
+  // Kalau pakai emulator ganti ke: 'http://10.0.2.2:8000/api'
+  // ─────────────────────────────────────────────────────────
+
+  static const Duration _timeout = Duration(seconds: 10);
   static String? _token;
 
   // ==================== TOKEN ====================
@@ -58,10 +64,12 @@ class ApiService {
     try {
       final response = await http
           .get(Uri.parse('$_baseUrl$endpoint'), headers: await _headers())
-          .timeout(const Duration(seconds: 10));
+          .timeout(_timeout);
       return _parseResponse(response);
-    } catch (_) {
-      return null; // offline atau error
+    } on TimeoutException {
+      throw Exception('Koneksi timeout. Pastikan server berjalan.');
+    } catch (e) {
+      throw Exception('Tidak dapat terhubung ke server: $e');
     }
   }
 
@@ -74,10 +82,30 @@ class ApiService {
             headers: await _headers(),
             body: jsonEncode(body),
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(_timeout);
       return _parseResponse(response);
-    } catch (_) {
-      return null;
+    } on TimeoutException {
+      throw Exception('Koneksi timeout. Pastikan server berjalan.');
+    } catch (e) {
+      throw Exception('Tidak dapat terhubung ke server: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>?> put(
+      String endpoint, Map<String, dynamic> body) async {
+    try {
+      final response = await http
+          .put(
+            Uri.parse('$_baseUrl$endpoint'),
+            headers: await _headers(),
+            body: jsonEncode(body),
+          )
+          .timeout(_timeout);
+      return _parseResponse(response);
+    } on TimeoutException {
+      throw Exception('Koneksi timeout.');
+    } catch (e) {
+      throw Exception('Tidak dapat terhubung ke server: $e');
     }
   }
 
@@ -85,17 +113,21 @@ class ApiService {
     try {
       final response = await http
           .delete(Uri.parse('$_baseUrl$endpoint'), headers: await _headers())
-          .timeout(const Duration(seconds: 10));
+          .timeout(_timeout);
       return _parseResponse(response);
-    } catch (_) {
-      return null;
+    } on TimeoutException {
+      throw Exception('Koneksi timeout.');
+    } catch (e) {
+      throw Exception('Tidak dapat terhubung ke server: $e');
     }
   }
 
   static Map<String, dynamic>? _parseResponse(http.Response response) {
     try {
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return data;
+      final data = jsonDecode(response.body);
+      if (data is Map<String, dynamic>) return data;
+      if (data is List) return {'success': true, 'data': data};
+      return null;
     } catch (_) {
       return null;
     }
@@ -129,27 +161,132 @@ class ApiService {
     await hapusToken();
   }
 
-  // ==================== FOODS ====================
-  static Future<List<Map<String, dynamic>>?> searchFoods(String query) async {
-    final res = await get('/foods?q=$query');
-    if (res == null || res['success'] != true) return null;
-    return List<Map<String, dynamic>>.from(res['data']);
+  // ==================== ARTIKEL (USER — publik) ====================
+  // Pakai model: Artikel dari artikel_model.dart
+  // Field: id, judul, isi, ringkasan, gambar, kategori, duraBaca,
+  //        isPublished, views, admin, createdAt
+
+  static Future<List<Artikel>> getArtikel() async {
+    final res = await get('/artikels');
+    if (res == null) return [];
+    final List data = res['data'] ?? [];
+    return data.map((e) => Artikel.fromJson(e)).toList();
   }
 
-  static Future<Map<String, dynamic>?> getFoodById(String id) async {
+  // ==================== ARTIKEL (ADMIN) ====================
+  static Future<List<Artikel>> getArtikelAdmin() async {
+    final res = await get('/admin/artikels');
+    if (res == null) return [];
+    final List data = res['data'] ?? [];
+    return data.map((e) => Artikel.fromJson(e)).toList();
+  }
+
+  static Future<Artikel?> createArtikel({
+    required String judul,
+    required String isi,
+    required String kategori,
+    bool isPublished = false,
+    String? gambar,
+  }) async {
+    final res = await post('/admin/artikels', {
+      'judul':        judul,
+      'isi':          isi,
+      'kategori':     kategori,
+      'is_published': isPublished,
+      if (gambar != null) 'gambar': gambar,
+    });
+    if (res == null || res['success'] != true) return null;
+    return Artikel.fromJson(res['data']);
+  }
+
+  static Future<bool> deleteArtikel(int id) async {
+    final res = await delete('/admin/artikels/$id');
+    return res != null && res['success'] == true;
+  }
+
+  // ==================== FOODS ====================
+  // Pakai model: FoodItem dari food_item.dart
+  // Field: id (String), nama, emoji, kaloriPer100g, karboPer100g,
+  //        proteinPer100g, lemakPer100g, seratPer100g, gulaPer100g,
+  //        kategori, indeksGlikemik
+
+  static Future<List<FoodItem>> searchFoods(String query) async {
+    final res = await get('/foods?q=$query');
+    if (res == null || res['success'] != true) return [];
+    final List data = res['data'] ?? [];
+    return data.map((e) => FoodItem.fromMap({
+      'id':              e['id']?.toString() ?? '',
+      'nama':            e['nama'] ?? e['name'] ?? '',
+      'emoji':           e['emoji'] ?? '🍽️',
+      'kalori_100g':     e['kalori_per_100g'] ?? e['kalori_100g'] ?? 0,
+      'karbo_100g':      e['karbo_per_100g'] ?? e['karbo_100g'] ?? 0,
+      'protein_100g':    e['protein_per_100g'] ?? e['protein_100g'] ?? 0,
+      'lemak_100g':      e['lemak_per_100g'] ?? e['lemak_100g'] ?? 0,
+      'serat_100g':      e['serat_per_100g'] ?? e['serat_100g'] ?? 0,
+      'gula_100g':       e['gula_per_100g'] ?? e['gula_100g'] ?? 0,
+      'kategori':        e['kategori'] ?? 'umum',
+      'indeks_glikemik': e['indeks_glikemik'] ?? e['glycemic_index'] ?? 50,
+    })).toList();
+  }
+
+  static Future<FoodItem?> getFoodById(String id) async {
     final res = await get('/foods/$id');
     if (res == null || res['success'] != true) return null;
-    return res['data'];
+    final e = res['data'];
+    return FoodItem.fromMap({
+      'id':              e['id']?.toString() ?? '',
+      'nama':            e['nama'] ?? e['name'] ?? '',
+      'emoji':           e['emoji'] ?? '🍽️',
+      'kalori_100g':     e['kalori_per_100g'] ?? e['kalori_100g'] ?? 0,
+      'karbo_100g':      e['karbo_per_100g'] ?? e['karbo_100g'] ?? 0,
+      'protein_100g':    e['protein_per_100g'] ?? e['protein_100g'] ?? 0,
+      'lemak_100g':      e['lemak_per_100g'] ?? e['lemak_100g'] ?? 0,
+      'serat_100g':      e['serat_per_100g'] ?? e['serat_100g'] ?? 0,
+      'gula_100g':       e['gula_per_100g'] ?? e['gula_100g'] ?? 0,
+      'kategori':        e['kategori'] ?? 'umum',
+      'indeks_glikemik': e['indeks_glikemik'] ?? 50,
+    });
   }
 
   // ==================== FOOD LOG ====================
-  static Future<Map<String, dynamic>?> getFoodLogs({String? tanggal}) async {
+  // Pakai model: JurnalMakanan dari food_journal.dart
+
+  static Future<List<JurnalMakanan>> getFoodLogs({String? tanggal}) async {
     final query = tanggal != null ? '?tanggal=$tanggal' : '';
-    return await get('/food-logs$query');
+    final res = await get('/food-logs$query');
+    if (res == null || res['success'] != true) return [];
+    final List data = res['data'] ?? [];
+    return data.map((e) => JurnalMakanan.fromMap({
+      'id':              e['id']?.toString() ?? '',
+      'nama_makanan':    e['food_name'] ?? e['nama_makanan'] ?? '',
+      'food_id':         e['food_id']?.toString(),
+      'gram':            e['portion'] ?? e['gram'] ?? 0,
+      'waktu_makan':     e['meal_time'] ?? e['waktu_makan'] ?? '',
+      'kalori':          e['calories'] ?? e['kalori'] ?? 0,
+      'karbo':           e['carbs'] ?? e['karbo'] ?? 0,
+      'protein':         e['protein'] ?? 0,
+      'lemak':           e['fat'] ?? e['lemak'] ?? 0,
+      'serat':           e['fiber'] ?? e['serat'] ?? 0,
+      'gula':            e['sugar'] ?? e['gula'] ?? 0,
+      'foto_path':       e['photo_path'] ?? e['foto_path'],
+      'dicatat_pada':    e['created_at'] ?? e['dicatat_pada'] ?? DateTime.now().toIso8601String(),
+      'indeks_glikemik': e['glycemic_index'] ?? e['indeks_glikemik'] ?? 50,
+    })).toList();
   }
 
-  static Future<bool> saveFoodLog(Map<String, dynamic> data) async {
-    final res = await post('/food-logs', data);
+  static Future<bool> saveFoodLog(JurnalMakanan jurnal) async {
+    final res = await post('/food-logs', {
+      'food_name':    jurnal.displayNama,
+      'meal_time':    jurnal.waktuMakan,
+      'calories':     jurnal.kalori.round(),
+      'carbs':        jurnal.karbo.round(),
+      'protein':      jurnal.protein,
+      'fat':          jurnal.lemak,
+      'portion':      jurnal.gram,
+      'portion_unit': 'gram',
+      'input_method': jurnal.fotoPath != null ? 'photo' : 'manual',
+      if (jurnal.fotoPath != null) 'photo_path': jurnal.fotoPath,
+    });
     return res != null && res['success'] == true;
   }
 
@@ -159,17 +296,30 @@ class ApiService {
   }
 
   // ==================== GULA DARAH ====================
-  static Future<List<Map<String, dynamic>>?> getGulaDarah(
-      {String? tanggal}) async {
+  // Pakai model: GlucoseEntry dari glucose_entry.dart
+  // Field: nilai (double), waktu (DateTime), konteksMakan, catatan
+
+  static Future<List<GlucoseEntry>> getGulaDarah({String? tanggal}) async {
     final query = tanggal != null ? '?tanggal=$tanggal' : '';
     final res = await get('/gula-darah$query');
-    if (res == null || res['success'] != true) return null;
-    return List<Map<String, dynamic>>.from(res['data']);
+    if (res == null || res['success'] != true) return [];
+    final List data = res['data'] ?? [];
+    return data.map((e) => GlucoseEntry(
+      nilai:        (e['kadar'] ?? e['nilai'] ?? 0).toDouble(),
+      waktu:        DateTime.tryParse(e['created_at'] ?? '') ?? DateTime.now(),
+      konteksMakan: e['waktu'] ?? e['konteks_makan'] ?? '',
+      catatan:      e['catatan'] ?? '',
+    )).toList();
   }
 
-  static Future<Map<String, dynamic>?> saveGulaDarah(
-      Map<String, dynamic> data) async {
-    return await post('/gula-darah', data);
+  static Future<bool> saveGulaDarah(GlucoseEntry entry) async {
+    final res = await post('/gula-darah', {
+      'kadar':         entry.nilai.round(),
+      'waktu':         entry.konteksMakan,
+      'catatan':       entry.catatan,
+      'tanggal':       entry.waktu.toIso8601String().split('T')[0],
+    });
+    return res != null && res['success'] == true;
   }
 
   static Future<bool> deleteGulaDarah(String id) async {

@@ -4,11 +4,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/artikel_model.dart';
 
 class ArtikelService {
-  static const String _base = 'http://10.0.2.2:8000/api';
+  // ─── Sama dengan ApiService ───────────────────────────
+  static const String _base = 'http://172.16.1.252:8000/api';
 
   static Future<String?> _token() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('api_token');
+    // cek kedua key — api_token (ApiService) dan auth_token (lama)
+    return prefs.getString('api_token') ?? prefs.getString('auth_token');
   }
 
   static Future<Map<String, String>> _headers() async {
@@ -67,10 +69,10 @@ class ArtikelService {
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         return {
-          'artikels':      (body['data'] as List).map((e) => Artikel.fromJson(e)).toList(),
-          'total_terbit':  body['total_terbit'] ?? 0,
-          'total_draf':    body['total_draf'] ?? 0,
-          'total_views':   body['total_views'] ?? 0,
+          'artikels':     (body['data'] as List).map((e) => Artikel.fromJson(e)).toList(),
+          'total_terbit': body['total_terbit'] ?? 0,
+          'total_draf':   body['total_draf'] ?? 0,
+          'total_views':  body['total_views'] ?? 0,
         };
       }
       return {'artikels': <Artikel>[], 'total_terbit': 0, 'total_draf': 0, 'total_views': 0};
@@ -97,8 +99,8 @@ class ArtikelService {
           'isi':          isi,
           'kategori':     kategori,
           'is_published': isPublished,
-          'ringkasan':    ringkasan,
-          'gambar':       gambar,
+          if (ringkasan != null) 'ringkasan': ringkasan,
+          if (gambar != null) 'gambar': gambar,
         }),
       );
       return {'success': res.statusCode == 201, 'data': jsonDecode(res.body)};
