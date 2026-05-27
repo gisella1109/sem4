@@ -50,39 +50,30 @@ class FoodLogController extends Controller
 
     // POST /api/food-logs
     // Simpan log makanan baru (dari manual ATAU foto)
-    public function store(Request $request)
-    {
-        $request->validate([
-            'food_name'    => 'required|string|max:255',
-            'meal_time'    => 'required|string',
-            'calories'     => 'required|numeric|min:0',
-            'carbs'        => 'required|numeric|min:0',
-            'portion'      => 'required|numeric|min:0',
-            'portion_unit' => 'required|string|max:100',
-            'input_method' => 'required|in:manual,photo',
-            'user_id'      => 'nullable|exists:users,id',
-            'notes'        => 'nullable|string',
-        ]);
+   public function store(Request $request)
+{
+    $foodLog = FoodLog::create([
+        'user_id'       => auth()->id(),
 
-        $log = FoodLog::create([
-            'user_id'      => $request->user_id,
-            'food_name'    => $request->food_name,
-            'meal_time'    => $request->meal_time,
-            'calories'     => (int) round($request->calories),
-            'carbs'        => (int) round($request->carbs),
-            'portion'      => $request->portion,
-            'portion_unit' => $request->portion_unit,
-            'notes'        => $request->notes,
-            'input_method' => $request->input_method,
-        ]);
+        'nama_manual'   => $request->food_name,
+        'waktu_makan'   => $request->meal_time,
 
-        return response()->json([
-            'status'  => 'success',
-            'message' => 'Log makanan berhasil disimpan.',
-            'data'    => $log,
-        ], 201);
-    }
+        'gram'          => $request->portion,
 
+        'kalori_manual' => $request->calories,
+        'karbo_manual'  => $request->carbs,
+
+        'protein_manual'=> $request->protein ?? 0,
+        'lemak_manual'  => $request->fat ?? 0,
+
+        'dicatat_pada'  => now(),
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'data' => $foodLog
+    ]);
+}
     // GET /api/food-logs/{id}
     public function show($id)
     {
@@ -99,13 +90,13 @@ class FoodLogController extends Controller
         $log = FoodLog::findOrFail($id);
 
         $request->validate([
-            'food_name'    => 'sometimes|string|max:255',
-            'meal_time'    => 'sometimes|string',
-            'calories'     => 'sometimes|numeric|min:0',
-            'carbs'        => 'sometimes|numeric|min:0',
-            'portion'      => 'sometimes|numeric|min:0',
-            'portion_unit' => 'sometimes|string|max:100',
-            'notes'        => 'nullable|string',
+            'waktu_makan' => 'required|string',
+            'gram' => 'required|numeric',
+            'user_id' => 'nullable|exists:users,id',
+            'food_id' => 'nullable|string',
+            'nama_manual' => 'nullable|string',
+            'kalori_manual' => 'nullable|numeric',
+            'karbo_manual' => 'nullable|numeric',
         ]);
 
         $log->update($request->only([

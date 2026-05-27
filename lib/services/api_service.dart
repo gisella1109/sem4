@@ -11,7 +11,7 @@ import '../models/glucose_entry.dart';
 
 class ApiService {
   // ─── IP LAPTOP (Wi-Fi) ───────────────────────────────────
-  static const String _baseUrl = 'http://172.16.1.252:8000/api';
+static const String _baseUrl = 'http://192.168.1.10:8000/api';
   // Kalau pakai emulator ganti ke: 'http://10.0.2.2:8000/api'
   // ─────────────────────────────────────────────────────────
 

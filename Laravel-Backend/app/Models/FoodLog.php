@@ -9,16 +9,21 @@ class FoodLog extends Model
     protected $table = 'food_logs';
 
     protected $fillable = [
-        'user_id',
-        'food_name',
-        'meal_time',
-        'calories',
-        'carbs',
-        'portion',
-        'portion_unit',
-        'notes',
-        'input_method', // 'manual' atau 'photo'
-    ];
+    'user_id',
+    'food_id',
+
+    'nama_manual',
+    'waktu_makan',
+    'gram',
+
+    'kalori_manual',
+    'karbo_manual',
+
+    'protein_manual',
+    'lemak_manual',
+
+    'dicatat_pada',
+];
 
     protected $casts = [
         'calories' => 'integer',

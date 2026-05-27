@@ -1,14 +1,8 @@
-// ============================================================
-// FILE: manual_food_log_page.dart
-// FUNGSI: Catat makanan manual — pilih porsi pakai satuan
-//         alami (piring, mangkuk, biji, butir, potong, dll)
-//         bukan slider gram. Perhitungan sama dengan foto.
-// ============================================================
-
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
+import '../models/food_journal.dart';
+import '../services/api_service.dart';
 import 'food_analysis_page.dart';
-
 class CatatanMakananManualPage extends StatefulWidget {
   const CatatanMakananManualPage({super.key});
 
@@ -135,29 +129,95 @@ class _CatatanMakananManualPageState
   }
 
   Future<void> _simpanDanAnalisis() async {
-    if (_selectedFood == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+  if (_selectedFood == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
         content: Text('Silakan pilih makanan terlebih dahulu'),
         backgroundColor: Colors.redAccent,
-        behavior: SnackBarBehavior.floating,
-      ));
-      return;
-    }
+      ),
+    );
+    return;
+  }
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => FoodAnalysisPage(
-          namaMakanan: _selectedFood!['nama'],
-          waktuMakan:  _daftarWaktuMakan[_waktuMakanDipilih]['label'] as String,
-          porsiGram:   _totalGram,
-          foodId:      _selectedFood!['id'],
-          imageBytes:  null,
-          foodData:    _selectedFood,
-        ),
+  // HITUNG NUTRISI
+  final kalori =
+      (_selectedFood!['kalori_100g'] as num) *
+      _totalGram / 100;
+
+  final karbo =
+      (_selectedFood!['karbo_100g'] as num) *
+      _totalGram / 100;
+
+  final protein =
+      (_selectedFood!['protein_100g'] as num) *
+      _totalGram / 100;
+
+  final lemak =
+      (_selectedFood!['lemak_100g'] as num) *
+      _totalGram / 100;
+
+  // BUAT OBJECT JURNAL
+  final jurnal = JurnalMakanan(
+  id: '',
+  namaMakanan: _selectedFood!['nama'],
+  foodId: _selectedFood!['id'].toString(),
+  gram: _totalGram,
+  waktuMakan:
+      _daftarWaktuMakan[_waktuMakanDipilih]['label'] as String,
+  kalori: ((_selectedFood!['kalori_100g'] as num) * _totalGram / 100)
+      .toDouble(),
+  karbo: ((_selectedFood!['karbo_100g'] as num) * _totalGram / 100)
+      .toDouble(),
+  protein:
+      ((_selectedFood!['protein_100g'] as num) * _totalGram / 100)
+          .toDouble(),
+  lemak:
+      ((_selectedFood!['lemak_100g'] as num) * _totalGram / 100)
+          .toDouble(),
+  serat:
+      ((_selectedFood!['serat_100g'] as num?)?.toDouble() ?? 0),
+  gula:
+      ((_selectedFood!['gula_100g'] as num?)?.toDouble() ?? 0),
+  fotoPath: null,
+  dicatatPada: DateTime.now(),
+  indeksGlikemik:
+      (_selectedFood!['indeks_glikemik'] as num?)?.toInt() ?? 50,
+);
+
+await ApiService.saveFoodLog(jurnal);
+  if (berhasil) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Berhasil disimpan ke database'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Gagal simpan ke database'),
+        backgroundColor: Colors.red,
       ),
     );
   }
+
+  // PINDAH HALAMAN
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => FoodAnalysisPage(
+        namaMakanan: _selectedFood!['nama'],
+        waktuMakan:
+            _daftarWaktuMakan[_waktuMakanDipilih]['label']
+                as String,
+        porsiGram: _totalGram,
+        foodId: _selectedFood!['id'],
+        imageBytes: null,
+        foodData: _selectedFood,
+      ),
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
